@@ -1,5 +1,5 @@
 import Sparkline from "./Sparkline.jsx";
-import { ago, burnLevel, duration, pct } from "../format.js";
+import { ago, burn, burnLevel, duration, pct } from "../format.js";
 
 export default function ServiceCard({ service, report, hasToken, onBeat, onDelete, busy }) {
   const status = report?.status ?? service.status;
@@ -29,7 +29,7 @@ export default function ServiceCard({ service, report, hasToken, onBeat, onDelet
         <div>
           <span className="label">Burn rate</span>
           <strong className={`burn burn-${level}`}>
-            {report?.burn_rate === null || report?.burn_rate === undefined ? "—" : `${report.burn_rate.toFixed(2)}×`}
+            {burn(report?.burn_rate)}
           </strong>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { burnLevel } from "../format.js";
+import { burn, burnLevel } from "../format.js";
 
 export default function FleetSummary({ fleet }) {
   if (!fleet) return null;
@@ -9,7 +9,7 @@ export default function FleetSummary({ fleet }) {
     { label: "No data", value: fleet.no_data },
     {
       label: "Worst burn",
-      value: fleet.worst_burn_rate === null ? "—" : `${fleet.worst_burn_rate.toFixed(1)}×`,
+      value: burn(fleet.worst_burn_rate, 1),
       tone: { critical: "bad", warning: "warn", ok: "good" }[burnLevel(fleet.worst_burn_rate)] || "",
     },
   ];

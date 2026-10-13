@@ -1,6 +1,9 @@
 export const pct = (ratio, digits = 2) =>
   ratio === null || ratio === undefined ? "—" : `${(ratio * 100).toFixed(digits)}%`;
 
+export const burn = (rate, digits = 2) =>
+  rate === null || rate === undefined ? "—" : `${rate.toFixed(digits)}×`;
+
 export const burnLevel = (rate) => {
   if (rate === null || rate === undefined) return "none";
   if (rate >= 14.4) return "critical"; // would exhaust a 30-day budget in ~2 days
