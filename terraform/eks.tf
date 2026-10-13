@@ -19,6 +19,11 @@ module "eks" {
   endpoint_public_access                   = true
   enable_cluster_creator_admin_permissions = true
 
+  # No IAM OIDC provider: nothing here uses IRSA, and pods that need AWS access use EKS
+  # Pod Identity (the agent add-on below) instead. This AWS account's organization
+  # policy also denies iam:CreateOpenIDConnectProvider, so the first apply stopped here.
+  enable_irsa = false
+
   addons = {
     coredns    = {}
     kube-proxy = {}
