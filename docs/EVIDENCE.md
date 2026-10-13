@@ -13,7 +13,7 @@ the capstone rubric they evidence.
 | [M5 CI/CD](#m5--cicd) | 15 | green pipeline, GHCR packages with SHA tags |
 | [M6 DevSecOps](#m6--devsecops) | 5 | Trivy gate blocking, then passing on both architectures, with explanation |
 | [M7 Terraform](#m7--terraform) | 15 | plan, apply, hardening read back from AWS, AWS Console (VPC + EKS), destroy verified empty |
-| [M8 Kubernetes + Helm](#m8--kubernetes--helm) | 15 | `helm upgrade --install`, pods, services, Ingress |
+| [M8 Kubernetes + Helm](#m8--kubernetes--helm) | 15 | `helm upgrade --install`, pods, services, Ingress, HPA scaling 2 → 6 |
 | [M9 Observability](#m9--observability) | 10 | `/metrics`, Prometheus targets UP, Grafana dashboard |
 | [M10 Docs + demo](#m10--documentation-and-live-demo) | 5 | README, commit → pipeline → GitOps rollout |
 
@@ -231,6 +231,14 @@ namespace enforces the Pod Security `restricted` profile.
 The Ingress routes `/api` to the backend and `/` to the frontend, for both environments:
 
 ![Ingress routing](evidence/m8-ingress-routing.png)
+
+**Autoscaling.** The backend's HorizontalPodAutoscaler scales between 2 and 6 replicas on a
+70% CPU target. Under load from twelve parallel clients through the Ingress, CPU climbed past
+370% of the target and peaked at 383%. The HPA scaled the backend from 2 to 4 to 6 replicas within 30 seconds. No
+simulated service missed a heartbeat while it scaled, and after a 5-minute cooldown it scaled
+back to 2.
+
+![HPA scaling the backend](evidence/m8-hpa-autoscaling.png)
 
 ## M9 — Observability
 
