@@ -12,7 +12,7 @@ the capstone rubric they evidence.
 | [M4 Docker](#m4--docker) | 10 | `compose up --build`, non-root images, app on :3000 |
 | [M5 CI/CD](#m5--cicd) | 15 | green pipeline, GHCR packages with SHA tags |
 | [M6 DevSecOps](#m6--devsecops) | 5 | Trivy gate blocking, then passing, with explanation |
-| [M7 Terraform](#m7--terraform) | 15 | plan, apply, cluster nodes, AWS resources, destroy |
+| [M7 Terraform](#m7--terraform) | 15 | plan, apply, live EKS nodes and VPC, destroy verified empty |
 | [M8 Kubernetes + Helm](#m8--kubernetes--helm) | 15 | `helm upgrade --install`, pods, services, Ingress |
 | [M9 Observability](#m9--observability) | 10 | `/metrics`, Prometheus targets UP, Grafana dashboard |
 | [M10 Docs + demo](#m10--documentation-and-live-demo) | 5 | README, commit → pipeline → GitOps rollout |
@@ -128,6 +128,26 @@ cluster is ACTIVE on the STANDARD support tier (never the 6× extended-support p
 the VPC has two public and two private subnets across two availability zones:
 
 ![EKS cluster live](evidence/m7-eks-cluster-live.png)
+
+The VPC behind it: the internet gateway is attached, the NAT gateway is available, the
+private subnets route through the NAT and the public subnets through the internet gateway.
+At this point 23 resources carry the `Project=argus` tag.
+
+![VPC live](evidence/m7-aws-vpc-live.png)
+
+> **About the AWS Console screenshots.** These views come from the AWS API, which is the
+> same data the console displays. Console screenshots need an interactive, logged-in
+> browser session, and the cluster was destroyed promptly rather than kept billing while
+> waiting for one. To add them, run `terraform apply` again (about 15 minutes, a few cents
+> of credit), take the VPC *Resource map* and the EKS cluster overview in `ap-southeast-2`,
+> then run `terraform destroy`.
+
+**Destroy.** `terraform destroy` removed all 50 resources. The checks afterwards query AWS
+directly, not Terraform's state: no EKS clusters, no tagged VPCs, no NAT gateways, no Elastic
+IPs, no running instances and no load balancers. Nothing is left to bill. The cluster ran for
+about 40 minutes, a few tens of cents of the account's credit.
+
+![terraform destroy](evidence/m7-terraform-destroy.png)
 
 ## M8 — Kubernetes + Helm
 
