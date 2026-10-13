@@ -10,6 +10,8 @@ is being burned. Then it tells you before the budget runs out.
 
 ![Argus status board](docs/evidence/m1-status-board.png)
 
+**Evidence for every rubric module, with screenshots: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).**
+
 ---
 
 ## What it does
