@@ -8,6 +8,11 @@ metadata:
     app.kubernetes.io/component: simulator
 spec:
   replicas: 1
+  # Never run two simulators at once. During a rolling update the new pod enrols by
+  # rotating every service's token, the old pod gets 401s and rotates them back, and the
+  # two fight until the old one exits, dropping heartbeats that look like outages.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "argus.selectorLabels" (dict "ctx" . "component" "simulator") | nindent 6 }}
