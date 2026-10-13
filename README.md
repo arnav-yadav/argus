@@ -12,6 +12,8 @@ is being burned. Then it tells you before the budget runs out.
 
 **Evidence for every rubric module, with screenshots: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).**
 
+**Presentation:** [`docs/Argus-presentation.pptx`](docs/Argus-presentation.pptx), 16 slides with speaker notes.
+
 ---
 
 ## What it does
