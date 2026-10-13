@@ -85,7 +85,7 @@ flowchart LR
 | Backend | FastAPI, SQLAlchemy 2, Alembic, Postgres | 12 routes, scrape-time SLO metrics |
 | Frontend | React 19, Vite, nginx-unprivileged | `/api` upstream templated at start-up |
 | Simulator | Python standard library only | Healthy, flaky, degraded and periodically silent services |
-| Packaging | Docker multi-stage, Helm 3 chart | Non-root, read-only root filesystem, no pip at runtime |
+| Packaging | Docker multi-stage on Alpine, Helm 3 chart | Non-root, read-only root filesystem, no pip at runtime |
 | Delivery | GitHub Actions → GHCR → ArgoCD | Trivy gate before push, GitOps promotion |
 | Cloud | Terraform → AWS VPC + EKS 1.35 | See [`terraform/README.md`](terraform/README.md) |
 | Observability | kube-prometheus-stack | Custom metrics, burn-rate alerts, provisioned dashboard |
@@ -141,7 +141,7 @@ python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/ruff check . && .venv/bin/pytest -v --cov=app
 ```
 
-43 tests across the API, the migrations and the SLO maths. They run against an in-memory
+48 tests across the API, the migrations and the SLO maths. They run against an in-memory
 SQLite database configured in `tests/conftest.py`, never the real one.
 
 ### On Kubernetes (minikube)
@@ -177,21 +177,24 @@ kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80
 
 ## CI/CD
 
-`.github/workflows/ci-cd.yml` runs on every push and pull request:
+`.github/workflows/ci-cd.yml` runs on every push to `main`, docs-only changes included, and
+on every pull request that touches code:
 
 ```mermaid
 flowchart LR
     be[Backend<br/>ruff + bandit rules<br/>pytest + coverage] --> img
     fe[Frontend<br/>npm ci + build] --> img
-    img["Images ×3<br/>build amd64 → Trivy gate<br/>→ push amd64+arm64 to GHCR"] --> promote
+    img["Images ×3<br/>build amd64 + arm64 → Trivy gate on both<br/>→ push to GHCR"] --> promote
     helm[Helm<br/>lint + kubeconform] --> promote
+    tf[Terraform<br/>fmt + validate] --> promote
     sec[gitleaks<br/>full history] --> promote
     promote["Promote (main only)<br/>commit sha tag to<br/>values-minikube.yaml"] --> argo((ArgoCD<br/>rolls out))
 ```
 
 - **Tests gate everything.** No image is built if a test fails.
-- **Images are scanned before they are pushed.** Trivy fails the job on any fixable HIGH or
-  CRITICAL finding, and the full report goes to GitHub code scanning.
+- **Images are scanned before they are pushed.** Both architectures of every image are
+  built and scanned, and Trivy fails the job on any HIGH or CRITICAL finding, fixable or
+  not. The full report goes to GitHub code scanning.
 - **Tags are commit SHAs** (`sha-1a2b3c4` and the full SHA), never `latest`, so every
   running pod traces back to a commit.
 - **Images are multi-arch.** amd64 is for EKS and the GitHub runners; arm64 is for
@@ -210,7 +213,8 @@ flowchart LR
 | Read-only root filesystem for the backend, frontend and simulator | Helm templates |
 | Namespace enforces the Pod Security `restricted` profile | `k8s/namespace.yaml` |
 | No package manager in the Python runtime images | `backend/Dockerfile`, `simulator/Dockerfile` |
-| Trivy gate on every image before it can reach the registry | CI `images` job |
+| Alpine base images, which carry no OS packages the app does not need | all three Dockerfiles |
+| Trivy gate on both architectures of every image before it can reach the registry | CI `images` job |
 | gitleaks scan of the whole Git history | CI `secrets` job |
 | Bandit security rules on every Python file | `backend/ruff.toml` |
 | Database password created in-cluster, never committed | `scripts/bootstrap-minikube.sh` |
@@ -218,7 +222,10 @@ flowchart LR
 
 The Trivy gate earned its place on the first pipeline run. It blocked two images over four
 HIGH CVEs in libraries that pip vendors inside itself. The fix was to remove pip from the
-runtime images, which needed none of it. See [`docs/EVIDENCE.md`](docs/EVIDENCE.md#m6--devsecops).
+runtime images, which needed none of it. Later the backend moved from Debian slim to Alpine,
+dropping 44 HIGH CVEs that Debian had no fix for, in packages Argus never used. That let the
+gate fail on every HIGH or CRITICAL finding instead of only fixable ones. See
+[`docs/EVIDENCE.md`](docs/EVIDENCE.md#m6--devsecops).
 
 ---
 

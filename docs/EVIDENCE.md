@@ -7,7 +7,7 @@ the capstone rubric they evidence.
 | Module | Points | Evidence |
 |---|---|---|
 | [M1 Application](#m1--application) | 10 | status board in the browser |
-| [M2 Testing](#m2--testing) | 10 | 43 passing tests, 98% coverage, lint clean |
+| [M2 Testing](#m2--testing) | 10 | 48 passing tests, 98% coverage, lint clean |
 | [M3 Git and GitHub](#m3--git-and-github) | 5 | commit history |
 | [M4 Docker](#m4--docker) | 10 | `compose up --build`, non-root images, app on :3000 |
 | [M5 CI/CD](#m5--cicd) | 15 | green pipeline, GHCR packages with SHA tags |
@@ -32,7 +32,7 @@ Source: [`backend/app/`](../backend/app), [`backend/alembic/versions/`](../backe
 
 ## M2 — Testing
 
-`ruff` (including bandit security rules) and `pytest -v` with coverage: **43 passed, 98%
+`ruff` (including bandit security rules) and `pytest -v` with coverage: **48 passed, 98%
 coverage**. Tests use an in-memory SQLite database set up in
 [`tests/conftest.py`](../backend/tests/conftest.py), never the real database. They cover
 the API (service CRUD, token-protected heartbeats, uptime, fleet budget, metrics), the
