@@ -1,0 +1,218 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/argus
+  PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+jobs:
+  backend:
+    name: Backend · lint and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Lint with ruff (includes bandit security rules)
+        run: |
+          ruff check . ../simulator
+          ruff format --check . ../simulator
+      - name: Test (a failure here stops every later job)
+        run: pytest -v --cov=app --cov-report=term --cov-report=xml
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: backend/coverage.xml
+
+  frontend:
+    name: Frontend · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  helm:
+    name: Helm · lint and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+      - name: Lint every values file
+        run: |
+          for values in values.yaml values-minikube.yaml values-eks.yaml; do
+            helm lint helm/argus --strict -f "helm/argus/$values"
+          done
+      - name: Render and validate against Kubernetes 1.35 schemas
+        run: |
+          helm template argus helm/argus -n argus -f helm/argus/values-minikube.yaml \
+            --api-versions monitoring.coreos.com/v1 \
+            | kubeconform -strict -summary -kubernetes-version 1.35.0 \
+                -schema-location default \
+                -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+
+  secrets:
+    name: Secret scan · gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # scan the whole history, not just the latest commit
+      - name: Scan every commit for credentials
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo --redact --verbose --exit-code 1
+
+  images:
+    name: Image · ${{ matrix.component }}
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # push to GHCR
+      security-events: write   # upload Trivy results to code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [backend, frontend, simulator]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.component }}
+          # Commit SHAs only, never `latest`: every deployment is traceable to a commit.
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=sha,prefix=,format=long
+
+      - name: Build for scanning (amd64, loaded into the runner)
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.component }}
+          platforms: linux/amd64
+          load: true
+          tags: scan/argus-${{ matrix.component }}:${{ github.sha }}
+          build-args: APP_VERSION=sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+
+      - name: Trivy gate (fail on fixable HIGH or CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: scan/argus-${{ matrix.component }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          format: table
+          exit-code: "1"
+
+      - name: Trivy report for GitHub code scanning
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: scan/argus-${{ matrix.component }}:${{ github.sha }}
+          severity: MEDIUM,HIGH,CRITICAL
+          format: sarif
+          output: trivy-${{ matrix.component }}.sarif
+          exit-code: "0"
+          skip-setup-trivy: true
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.component }}.sarif
+          category: trivy-${{ matrix.component }}
+
+      # Only images that passed the gate above are ever pushed.
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch (amd64 for EKS, arm64 for Apple-silicon minikube)
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.component }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: APP_VERSION=sha-${{ github.sha }}
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.component }}
+
+  promote:
+    name: Promote · GitOps (minikube)
+    needs: [images, helm, secrets]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: promote
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Point the minikube environment at this build
+        run: |
+          TAG="sha-${GITHUB_SHA::7}"
+          grep -q '^  tag: ' helm/argus/values-minikube.yaml
+          sed -i -E "s/^  tag: .*/  tag: ${TAG}/" helm/argus/values-minikube.yaml
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          git diff
+      # ArgoCD in the cluster watches this file and rolls the new images out. Pushes made
+      # with GITHUB_TOKEN never start another workflow run, so this cannot loop.
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Deploy ${TAG} to minikube [skip ci]" || { echo "already at ${TAG}"; exit 0; }
+          for _ in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          exit 1
