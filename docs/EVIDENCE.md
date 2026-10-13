@@ -11,7 +11,7 @@ the capstone rubric they evidence.
 | [M3 Git and GitHub](#m3--git-and-github) | 5 | commit history |
 | [M4 Docker](#m4--docker) | 10 | `compose up --build`, non-root images, app on :3000 |
 | [M5 CI/CD](#m5--cicd) | 15 | green pipeline, GHCR packages with SHA tags |
-| [M6 DevSecOps](#m6--devsecops) | 5 | Trivy gate blocking, then passing, with explanation |
+| [M6 DevSecOps](#m6--devsecops) | 5 | Trivy gate blocking, then passing on both architectures, with explanation |
 | [M7 Terraform](#m7--terraform) | 15 | plan, apply, AWS Console (VPC + EKS), live nodes, destroy verified empty |
 | [M8 Kubernetes + Helm](#m8--kubernetes--helm) | 15 | `helm upgrade --install`, pods, services, Ingress |
 | [M9 Observability](#m9--observability) | 10 | `/metrics`, Prometheus targets UP, Grafana dashboard |
@@ -81,11 +81,11 @@ and the full SHA), never `latest`, and built for both amd64 and arm64:
 
 ## M6 — DevSecOps
 
-**What Trivy scanned.** Each container image, before it is allowed into the registry. That
-covers the operating-system packages (Debian 13 in the backend, Alpine in the others) and
-every Python package installed in the image, including packages vendored inside other
-packages. The gate fails the job on any HIGH or CRITICAL vulnerability that has a fix
-available.
+**What Trivy scans.** Each container image, in both of its architectures (amd64 and arm64),
+before it is allowed into the registry. That covers the operating-system packages (Alpine
+Linux in all three images) and every Python package installed in the image, including
+packages vendored inside other packages. The gate fails the job on any HIGH or CRITICAL
+vulnerability.
 
 **What it found.** On the very first run, the gate blocked the backend and simulator
 images. It found four HIGH vulnerabilities, all with fixes available, in code that **pip
@@ -96,7 +96,8 @@ vendors inside itself**:
 - `urllib3` (CVE-2026-97687, HTTPS-proxy traffic interception)
 - `urllib3` (CVE-2026-97689, denial of service through unbounded memory allocation)
 
-The Debian packages and all of Argus's own dependencies were clean.
+The backend's Debian packages had no HIGH finding with a fix available, and all of Argus's
+own dependencies were clean.
 
 **What it means, and the fix.** pip was only there because the official Python base image
 ships it, and nothing installs packages at runtime. So instead of suppressing the findings,
@@ -106,6 +107,19 @@ vulnerable ever reached GHCR, because the scan happens before the push.
 
 ![Trivy gate blocks the image](evidence/m6-trivy-gate-blocked.png)
 ![Trivy gate passes after the fix](evidence/m6-trivy-gate-passed.png)
+
+**Tightening the gate.** At first the gate skipped vulnerabilities that have no fix yet
+(`ignore-unfixed`). The backend was then on Debian slim, which carried 44 HIGH CVEs that
+Debian had not patched, in util-linux, perl, ncurses and systemd libraries that Argus never
+runs. A later review found two gaps: those unfixed CVEs were still shipping, and only the
+amd64 images were scanned, although minikube on Apple silicon runs the arm64 ones.
+
+The backend moved to Alpine (306 MB → 178 MB), which has none of those packages. The
+pipeline now builds, loads and scans both architectures before pushing. Every image then
+scanned clean at every severity, so `ignore-unfixed` was removed: the gate now fails on
+**any** HIGH or CRITICAL vulnerability, fixed upstream or not, in either architecture.
+
+![Trivy gate passes on both architectures](evidence/m6-trivy-gate-both-arches.png)
 
 ## M7 — Terraform
 
@@ -199,9 +213,18 @@ error budgets, burn rates, heartbeat rates, request rates and latency percentile
 
 ![Grafana dashboard](evidence/m9-grafana-dashboard.png)
 
-The multi-window burn-rate alerts evaluating against live data: `ArgusErrorBudgetFastBurn`
-is **firing** for *payments-gateway*, whose 2% failure rate burns its 99.9% budget at about
-20×, and the slow-burn alert is pending for both breaching services:
+The multi-window, multi-burn-rate alerts evaluating against live data, in the SRE
+workbook's three tiers:
+
+- **Fast burn** (14.4× over 1h and 5m) is **firing** for *legacy-billing*, whose periodic
+  90-second silences burn its 99.5% budget at 30×.
+- **Medium burn** (6× over 6h and 30m) is firing for *legacy-billing* and for
+  *payments-gateway*, whose 2% failure rate burns its 99.9% budget at about 20×.
+- **Slow burn**, the ticket tier, is firing for both, and pending for a third service.
+
+`ArgusErrorBudgetExhausted` fires for four services. An 11-minute pause of the whole minikube
+stack earlier in the day used up their 24h budgets, which is what it should report.
+`ArgusServiceDown` is quiet, because every service is sending heartbeats:
 
 ![Prometheus alerts](evidence/m9-prometheus-alerts.png)
 
