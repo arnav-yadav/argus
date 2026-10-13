@@ -133,4 +133,6 @@ def test_metrics_expose_slo_series(client, service):
     assert 'argus_service_up{service="payments-api"} 1.0' in text
     assert 'argus_heartbeats_total{service="payments-api",status="ok"}' in text
     assert 'argus_uptime_ratio{service="payments-api",window="1h"} 1.0' in text
+    assert 'argus_burn_rate{service="payments-api",window="5m"} 0.0' in text
+    assert 'argus_error_budget_remaining_ratio{service="payments-api"} 1.0' in text
     assert "http_requests_total" in text

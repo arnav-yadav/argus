@@ -26,7 +26,8 @@ HEARTBEATS = Counter(
     ["service", "status"],
 )
 
-SCRAPE_WINDOWS = ("1h", "24h")
+# 5m and 1h feed the fast-burn alert; 24h feeds the slow-burn alert and the budget gauge.
+SCRAPE_WINDOWS = ("5m", "1h", "24h")
 
 
 class SLOCollector(Collector):

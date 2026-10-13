@@ -28,6 +28,7 @@ UNKNOWN = "unknown"
 AVAILABLE_STATUSES = frozenset({"ok", "degraded"})
 
 WINDOWS: dict[str, timedelta] = {
+    "5m": timedelta(minutes=5),  # used by the fast-burn alert, not offered by the API
     "1h": timedelta(hours=1),
     "24h": timedelta(hours=24),
     "7d": timedelta(days=7),
