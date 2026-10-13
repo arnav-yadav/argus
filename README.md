@@ -82,7 +82,7 @@ flowchart LR
 
 | Component | Tech | Notes |
 |---|---|---|
-| Backend | FastAPI, SQLAlchemy 2, Alembic, Postgres | 12 routes, scrape-time SLO metrics |
+| Backend | FastAPI, SQLAlchemy 2, Alembic, Postgres | 13 routes, scrape-time SLO metrics |
 | Frontend | React 19, Vite, nginx-unprivileged | `/api` upstream templated at start-up |
 | Simulator | Python standard library only | Healthy, flaky, degraded and periodically silent services |
 | Packaging | Docker multi-stage on Alpine, Helm 3 chart | Non-root, read-only root filesystem, no pip at runtime |
