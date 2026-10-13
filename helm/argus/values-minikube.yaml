@@ -1,7 +1,7 @@
 # Local GitOps target. ArgoCD syncs the chart with this file from main.
 # The CI `promote` job rewrites image.tag after every green build of main.
 image:
-  tag: sha-1eb67fb
+  tag: sha-05cc685
 
 postgres:
   existingSecret: argus-db
