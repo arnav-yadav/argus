@@ -11,6 +11,13 @@ grafana:
   adminPassword: ""
   persistence:
     enabled: false
+  # Read-only anonymous access. Grafana here is reachable only through a local
+  # `kubectl port-forward`, and a Viewer cannot change anything; admin still needs the
+  # generated password.
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
   sidecar:
     dashboards:
       enabled: true
@@ -18,9 +25,11 @@ grafana:
       labelValue: "1"
       # The Argus dashboard ConfigMap lives in the argus namespace, not here.
       searchNamespace: ALL
+  # Grafana idles near 300Mi and spikes while rendering a full dashboard; a 384Mi limit
+  # got it OOMKilled mid-render.
   resources:
-    requests: { cpu: 50m, memory: 128Mi }
-    limits: { memory: 384Mi }
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 768Mi }
 
 prometheus:
   prometheusSpec:
