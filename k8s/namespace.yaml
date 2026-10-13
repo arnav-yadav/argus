@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argus
+  labels:
+    app.kubernetes.io/part-of: argus
+    # Pod Security Admission: reject any pod that runs as root, escalates privileges,
+    # keeps Linux capabilities or skips the seccomp profile. Every Argus workload
+    # (Postgres included) is written to pass the "restricted" profile.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
