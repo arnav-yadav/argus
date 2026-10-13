@@ -9,7 +9,8 @@ slot        One heartbeat interval. A service promises at least one beat per slo
 good slot   A slot that received at least one beat whose status counts as available
             (`ok` or `degraded`). A `fail` beat, or silence, leaves the slot bad.
 uptime      good slots / counted slots, over a window.
-error budget  The unavailability the SLO allows: 1 - target. A 99.5% SLO allows 0.5%.
+error budget  The downtime the SLO allows over a window: (1 - target) x window length.
+            A 99.5% SLO allows 432 seconds a day.
 burn rate   How fast the budget is being spent. 1.0 spends exactly the budget over the
             window; 14.4 would exhaust a 30-day budget in about 2 days.
 """
@@ -60,22 +61,34 @@ def current_status(
     return UP
 
 
-def slot_uptime(
+@dataclass(frozen=True)
+class SlotCount:
+    good: int
+    counted: int
+
+    @property
+    def bad(self) -> int:
+        return self.counted - self.good
+
+    @property
+    def ratio(self) -> float | None:
+        return self.good / self.counted if self.counted else None
+
+
+def count_slots(
     good_beats: Iterable[datetime],
     window_start: datetime,
     window_end: datetime,
     interval_s: int,
     created_at: datetime | None = None,
-) -> float | None:
-    """Fraction of heartbeat slots in the window that saw a good beat.
+) -> SlotCount:
+    """Count good slots, and slots that are fair to judge, within the window.
 
     The window is clipped to the service's creation time, so a service registered ten
     minutes ago is judged on ten minutes, not on a day it did not exist for.
 
     Only complete slots are counted, plus the in-progress slot if it already has a good
     beat. Without that rule every service would look slightly down between beats.
-
-    Returns None when there is nothing to judge yet.
     """
     if interval_s <= 0:
         raise ValueError("interval_s must be positive")
@@ -85,7 +98,7 @@ def slot_uptime(
     if created_at is not None:
         start = max(start, as_utc(created_at))
     if end <= start:
-        return None
+        return SlotCount(0, 0)
 
     complete_slots = int((end - start).total_seconds() // interval_s)
     good_slots = {
@@ -94,9 +107,18 @@ def slot_uptime(
         if start <= as_utc(beat) < end
     }
     counted = complete_slots + (1 if complete_slots in good_slots else 0)
-    if counted == 0:
-        return None
-    return len(good_slots) / counted
+    return SlotCount(len(good_slots), counted)
+
+
+def slot_uptime(
+    good_beats: Iterable[datetime],
+    window_start: datetime,
+    window_end: datetime,
+    interval_s: int,
+    created_at: datetime | None = None,
+) -> float | None:
+    """Fraction of judged slots that saw a good beat, or None if nothing can be judged yet."""
+    return count_slots(good_beats, window_start, window_end, interval_s, created_at).ratio
 
 
 def allowed_error_ratio(slo_target_pct: float) -> float:
@@ -121,12 +143,19 @@ class ErrorBudget:
         return self.consumed_ratio >= 1
 
 
-def error_budget(slo_target_pct: float, uptime: float, window: timedelta) -> ErrorBudget:
-    """Budget for one window. `remaining_ratio` goes negative once the SLO is breached."""
-    allowed = allowed_error_ratio(slo_target_pct)
-    consumed = (1 - uptime) / allowed
+def error_budget(slo_target_pct: float, bad_seconds: float, window: timedelta) -> ErrorBudget:
+    """Downtime spent against downtime allowed over one window.
+
+    This is deliberately measured in seconds rather than derived from the uptime ratio. A
+    service that has existed for three minutes and missed one 10-second slot has spent
+    10 s of an 86 s daily budget at 99.9%, which is 12%, not 58 times the budget. The *rate* of
+    spending is what `burn_rate` reports. `remaining_ratio` goes negative once the budget
+    for the window is gone.
+    """
+    allowed_s = allowed_error_ratio(slo_target_pct) * window.total_seconds()
+    consumed = bad_seconds / allowed_s
     return ErrorBudget(
-        allowed_downtime_s=allowed * window.total_seconds(),
+        allowed_downtime_s=allowed_s,
         consumed_ratio=consumed,
         remaining_ratio=1 - consumed,
     )

@@ -68,6 +68,13 @@ class TestSlotUptime:
         beats = [start + timedelta(seconds=1), start + timedelta(seconds=31)]
         assert slo.slot_uptime(beats, start, NOW, 30) == 1.0
 
+    def test_slot_count_reports_bad_slots(self):
+        start = NOW - timedelta(minutes=10)
+        count = slo.count_slots(
+            beats_every(30, start, start + timedelta(minutes=5)), start, NOW, 30
+        )
+        assert (count.good, count.counted, count.bad) == (10, 20, 10)
+
     def test_nothing_to_judge_returns_none(self):
         assert slo.slot_uptime([], NOW, NOW, 30) is None
         assert slo.slot_uptime([], NOW - timedelta(seconds=5), NOW, 30) is None
@@ -86,13 +93,20 @@ class TestErrorBudget:
         assert slo.burn_rate(1.0, 99.5) == 0
 
     def test_budget_for_99_5_over_a_day_is_432_seconds(self):
-        budget = slo.error_budget(99.5, 1.0, timedelta(hours=24))
+        budget = slo.error_budget(99.5, 0, timedelta(hours=24))
         assert budget.allowed_downtime_s == pytest.approx(432)
         assert budget.remaining_ratio == pytest.approx(1.0)
         assert not budget.exhausted
 
+    def test_budget_counts_downtime_spent_not_the_error_rate(self):
+        # A new service missed one 10s slot. At 99.9% it may lose 86.4s a day, so 10s of
+        # downtime is about 12% of the budget, even though its short-term rate is far worse.
+        budget = slo.error_budget(99.9, 10, timedelta(hours=24))
+        assert budget.consumed_ratio == pytest.approx(10 / 86.4)
+        assert not budget.exhausted
+
     def test_breached_slo_has_negative_remaining_budget(self):
-        budget = slo.error_budget(99.9, 0.99, timedelta(hours=24))
+        budget = slo.error_budget(99.9, 864, timedelta(hours=24))  # 1% of a day down
         assert budget.consumed_ratio == pytest.approx(10)
         assert budget.remaining_ratio == pytest.approx(-9)
         assert budget.exhausted

@@ -83,8 +83,13 @@ def build_report(
     start = now - span
     beats = good_beats_since(db, service.id, start)
 
-    uptime = slo.slot_uptime(beats, start, now, service.heartbeat_interval_s, service.created_at)
-    budget = slo.error_budget(service.slo_target, uptime, span) if uptime is not None else None
+    slots = slo.count_slots(beats, start, now, service.heartbeat_interval_s, service.created_at)
+    uptime = slots.ratio
+    budget = (
+        slo.error_budget(service.slo_target, slots.bad * service.heartbeat_interval_s, span)
+        if uptime is not None
+        else None
+    )
     burn = slo.burn_rate(uptime, service.slo_target) if uptime is not None else None
     spark = (
         slo.sparkline(beats, start, now, service.heartbeat_interval_s, service.created_at)

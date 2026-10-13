@@ -133,7 +133,8 @@ def service_uptime(service_id: int, db: DB, window: Window = "24h"):
         "slo_target": service.slo_target,
         "uptime": report.uptime,
         "burn_rate": report.burn_rate,
-        "allowed_downtime_s": (1 - service.slo_target / 100) * slo.WINDOWS[window].total_seconds(),
+        "allowed_downtime_s": slo.allowed_error_ratio(service.slo_target)
+        * slo.WINDOWS[window].total_seconds(),
         "budget_consumed_ratio": budget.consumed_ratio if budget else None,
         "budget_remaining_ratio": budget.remaining_ratio if budget else None,
         "sparkline": report.sparkline,
