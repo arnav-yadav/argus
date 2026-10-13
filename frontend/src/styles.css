@@ -100,6 +100,7 @@ button:disabled { opacity: 0.5; cursor: wait; }
 .token-box pre { margin: 0 0 10px; padding: 10px; background: var(--bg); border-radius: 8px; overflow-x: auto; font-size: 12px; color: var(--accent); }
 
 .foot { margin-top: 28px; text-align: center; color: var(--muted); font-size: 12px; }
+.foot a { color: var(--accent); text-decoration: none; }
 
 @media (max-width: 760px) {
   .fleet { grid-template-columns: repeat(2, 1fr); }

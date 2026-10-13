@@ -6,7 +6,8 @@ import ServiceCard from "./components/ServiceCard.jsx";
 
 const WINDOWS = ["1h", "24h", "7d"];
 const REFRESH_MS = 5000;
-const VERSION = import.meta.env.VITE_APP_VERSION || "dev";
+const VERSION = import.meta.env.VITE_APP_VERSION || "dev"; // "sha-<40 hex>" from CI
+const COMMIT = VERSION.startsWith("sha-") ? VERSION.slice(4) : null;
 
 function initialRange() {
   const fromUrl = new URLSearchParams(window.location.search).get("window");
@@ -78,7 +79,7 @@ export default function App() {
           </svg>
           <div>
             <h1>Argus</h1>
-            <p className="tagline">Every service watched. Every error budget accounted for.</p>
+            <p className="tagline">Every service watched. Every error budget accounted for. Every deploy traced to a commit.</p>
           </div>
         </div>
         <nav className="windows" aria-label="Reporting window">
@@ -119,7 +120,15 @@ export default function App() {
       </main>
 
       <footer className="foot">
-        Argus · build <code>{VERSION}</code> · refreshes every {REFRESH_MS / 1000}s
+        Argus · build{" "}
+        {COMMIT ? (
+          <a href={`https://github.com/arnav-yadav/argus/commit/${COMMIT}`}>
+            <code>sha-{COMMIT.slice(0, 7)}</code>
+          </a>
+        ) : (
+          <code>{VERSION}</code>
+        )}{" "}
+        · refreshes every {REFRESH_MS / 1000}s
       </footer>
     </div>
   );
