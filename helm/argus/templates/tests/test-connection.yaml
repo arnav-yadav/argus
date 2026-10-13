@@ -30,6 +30,4 @@ spec:
           budget = json.load(urllib.request.urlopen(frontend + "/api/slo/budget", timeout=5))
           print("backend ready, frontend proxies the API:", budget["services"], "services")
       securityContext:
-        allowPrivilegeEscalation: false
-        capabilities:
-          drop: ["ALL"]
+        {{- include "argus.containerSecurity" . | nindent 8 }}

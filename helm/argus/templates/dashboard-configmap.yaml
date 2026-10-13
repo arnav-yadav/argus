@@ -1,6 +1,7 @@
-{{- if .Values.metrics.dashboard.enabled }}
+{{- if and .Values.metrics.dashboard.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
 # The kube-prometheus-stack Grafana sidecar loads any ConfigMap carrying the
-# grafana_dashboard label, so the dashboard appears without a manual import.
+# grafana_dashboard label, so the dashboard appears without a manual import. Like the
+# ServiceMonitor, it is rendered only where that stack (and its CRDs) is installed.
 apiVersion: v1
 kind: ConfigMap
 metadata:
