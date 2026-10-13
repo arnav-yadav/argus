@@ -12,7 +12,7 @@ the capstone rubric they evidence.
 | [M4 Docker](#m4--docker) | 10 | `compose up --build`, non-root images, app on :3000 |
 | [M5 CI/CD](#m5--cicd) | 15 | green pipeline, GHCR packages with SHA tags |
 | [M6 DevSecOps](#m6--devsecops) | 5 | Trivy gate blocking, then passing on both architectures, with explanation |
-| [M7 Terraform](#m7--terraform) | 15 | plan, apply, AWS Console (VPC + EKS), live nodes, destroy verified empty |
+| [M7 Terraform](#m7--terraform) | 15 | plan, apply, hardening read back from AWS, AWS Console (VPC + EKS), destroy verified empty |
 | [M8 Kubernetes + Helm](#m8--kubernetes--helm) | 15 | `helm upgrade --install`, pods, services, Ingress |
 | [M9 Observability](#m9--observability) | 10 | `/metrics`, Prometheus targets UP, Grafana dashboard |
 | [M10 Docs + demo](#m10--documentation-and-live-demo) | 5 | README, commit → pipeline → GitOps rollout |
@@ -124,16 +124,20 @@ scanned clean at every severity, so `ignore-unfixed` was removed: the gate now f
 ## M7 — Terraform
 
 [`terraform/`](../terraform) provisions a VPC with two public and two private subnets, a NAT
-gateway, and an EKS 1.35 cluster with a managed node group, in `ap-southeast-2`.
+gateway, and an EKS 1.35 cluster with a managed node group, in `ap-southeast-2`. The cluster
+follows HashiCorp's Terraform security guidance and AWS's EKS guidance (see
+[Security decisions](../terraform/README.md#security-decisions)): the Kubernetes API is
+reachable only from the operator's address, node disks are encrypted, control-plane logs go to
+CloudWatch, and unhealthy nodes are repaired automatically.
 
 ![terraform plan](evidence/m7-terraform-plan.png)
 
-**Apply.** The first `terraform apply` created 50 of the 51 resources: the VPC, subnets,
-NAT gateway, the EKS cluster, its add-ons and the node group. It then stopped on one: this
-AWS account's organization policy denies `iam:CreateOpenIDConnectProvider`, the OIDC
-provider the EKS module creates by default for IRSA. Nothing in Argus uses IRSA, and the
-cluster already runs the EKS Pod Identity agent, so the fix was `enable_irsa = false`
-rather than a workaround. The next apply found nothing left to do.
+**Apply.** Applying the saved plan created all 52 resources: the VPC, subnets, NAT gateway,
+the CloudWatch log group, the EKS cluster (8 minutes), its five add-ons and the node group.
+The very first apply of this project had stopped on one resource: this AWS account's
+organization policy denies `iam:CreateOpenIDConnectProvider`, the OIDC provider the EKS module
+creates by default for IRSA. Nothing in Argus uses IRSA, and the cluster runs the EKS Pod
+Identity agent instead, so the fix was `enable_irsa = false` rather than a workaround.
 
 ![terraform apply](evidence/m7-terraform-apply.png)
 
@@ -143,40 +147,71 @@ the VPC has two public and two private subnets across two availability zones:
 
 ![EKS cluster live](evidence/m7-eks-cluster-live.png)
 
+**The hardening, read back from AWS** rather than from Terraform's state:
+
+- Authentication is through access entries only.
+- API, audit and authenticator logs are on, kept for one day.
+- The public endpoint accepts only the operator's `/32`, masked here, while the nodes use the
+  private endpoint.
+- Five add-ons are installed, including the node monitoring agent, and node auto repair is
+  on.
+- IMDSv2 is required with a hop limit of 1.
+- Both node volumes are **encrypted** gp3. This account does not encrypt EBS by default, so
+  the node disks of the earlier applies were not.
+
+![EKS hardening live](evidence/m7-eks-security-live.png)
+
 The VPC behind it: the internet gateway is attached, the NAT gateway is available, the
 private subnets route through the NAT and the public subnets through the internet gateway.
-At this point 23 resources carry the `Project=argus` tag.
+At this point 28 resources carry the `Project=argus` tag.
 
 ![VPC live](evidence/m7-aws-vpc-live.png)
 
 **In the AWS Console** (`ap-southeast-2`, shown in the ARNs, endpoint and AZ names). The VPC's
 resource map shows the two public and two private subnets across `ap-southeast-2a` and
-`ap-southeast-2b`, the three route tables, and the internet gateway:
+`ap-southeast-2b`, the three route tables, and the internet gateway. It was taken during an
+earlier apply. The VPC code has not changed since, only its IDs:
 
 ![AWS Console: VPC resource map](evidence/m7-aws-console-vpc.png)
 
-The EKS cluster: **Active**, Kubernetes **1.35** on standard support until March 2027, one
-managed node group, four add-ons, and no IAM OIDC providers (IRSA is off):
+The EKS cluster:
+
+- **Active**, Kubernetes **1.35**, on standard support until March 2027.
+- One managed node group and five add-ons.
+- Three IAM access entries (the Terraform identity, the node role and the EKS service role)
+  and no IAM OIDC providers, since IRSA is off.
+
+The console shows no pods or nodes because the console login is not one of those access
+entries. With authentication mode *EKS API*, nothing else can reach Kubernetes. The nodes are
+listed by `kubectl` above.
 
 ![AWS Console: EKS cluster](evidence/m7-aws-console-eks.png)
 
-Its configuration: the upgrade policy is pinned to standard support, deletion protection is
-off so `destroy` can remove it, and encryption uses the AWS-owned key, so there is no
-customer KMS key left behind. The networking is the Terraform-built VPC:
+Its configuration:
+
+- Authentication mode *EKS API* and standard support.
+- Deletion protection off, so `destroy` can remove it.
+- Encryption with the AWS-owned key, so there is no customer KMS key left behind.
+- Networking in the Terraform-built VPC with public and private endpoint access.
+
+The image is cropped just above the endpoint allow-list, because that shows the operator's IP
+address:
 
 ![AWS Console: EKS configuration](evidence/m7-aws-console-eks-config.png)
 
-Control-plane logging is off, so there is no log group to outlive the cluster, and every
-resource carries the `Project=argus` tag used to verify the teardown:
+Control-plane logging has API server, audit and authenticator logs on. Every resource carries
+the `Project=argus` tag used to verify the teardown:
 
 ![AWS Console: EKS logging and tags](evidence/m7-aws-console-eks-tags.png)
 
-**Destroy.** `terraform destroy` removed all 50 resources. The checks afterwards query AWS
-directly, not Terraform's state: no EKS clusters, no tagged VPCs, no NAT gateways, no Elastic
-IPs, no running instances and no load balancers. Nothing is left to bill. The cluster was
-created twice, once for the evidence above and once for the console screenshots, and was
-destroyed and verified empty both times. That was about an hour in total, under $0.50 of
-the account's credit.
+**Destroy.** `terraform destroy` removed all 52 resources in about 12 minutes. The checks
+afterwards query AWS directly, not Terraform's state. None of these are left: EKS clusters,
+tagged VPCs, NAT gateways, Elastic IPs, running instances, node volumes, load balancers, or
+the EKS log group. Nothing is left to bill.
+
+The cluster was created three times: for the first evidence, for the console screenshots, and
+for this hardened version. It was destroyed and verified empty each time. That came to about an
+hour and a half of running time, well under $1 of the account's credit.
 
 ![terraform destroy](evidence/m7-terraform-destroy.png)
 
