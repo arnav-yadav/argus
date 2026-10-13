@@ -12,7 +12,7 @@ the capstone rubric they evidence.
 | [M4 Docker](#m4--docker) | 10 | `compose up --build`, non-root images, app on :3000 |
 | [M5 CI/CD](#m5--cicd) | 15 | green pipeline, GHCR packages with SHA tags |
 | [M6 DevSecOps](#m6--devsecops) | 5 | Trivy gate blocking, then passing, with explanation |
-| [M7 Terraform](#m7--terraform) | 15 | plan, apply, live EKS nodes and VPC, destroy verified empty |
+| [M7 Terraform](#m7--terraform) | 15 | plan, apply, AWS Console (VPC + EKS), live nodes, destroy verified empty |
 | [M8 Kubernetes + Helm](#m8--kubernetes--helm) | 15 | `helm upgrade --install`, pods, services, Ingress |
 | [M9 Observability](#m9--observability) | 10 | `/metrics`, Prometheus targets UP, Grafana dashboard |
 | [M10 Docs + demo](#m10--documentation-and-live-demo) | 5 | README, commit → pipeline → GitOps rollout |
@@ -135,17 +135,34 @@ At this point 23 resources carry the `Project=argus` tag.
 
 ![VPC live](evidence/m7-aws-vpc-live.png)
 
-> **About the AWS Console screenshots.** These views come from the AWS API, which is the
-> same data the console displays. Console screenshots need an interactive, logged-in
-> browser session, and the cluster was destroyed promptly rather than kept billing while
-> waiting for one. To add them, run `terraform apply` again (about 15 minutes, a few cents
-> of credit), take the VPC *Resource map* and the EKS cluster overview in `ap-southeast-2`,
-> then run `terraform destroy`.
+**In the AWS Console** (`ap-southeast-2`, shown in the ARNs, endpoint and AZ names). The VPC's
+resource map shows the two public and two private subnets across `ap-southeast-2a` and
+`ap-southeast-2b`, the three route tables, and the internet gateway:
+
+![AWS Console: VPC resource map](evidence/m7-aws-console-vpc.png)
+
+The EKS cluster: **Active**, Kubernetes **1.35** on standard support until March 2027, one
+managed node group, four add-ons, and no IAM OIDC providers (IRSA is off):
+
+![AWS Console: EKS cluster](evidence/m7-aws-console-eks.png)
+
+Its configuration: the upgrade policy is pinned to standard support, deletion protection is
+off so `destroy` can remove it, and encryption uses the AWS-owned key, so there is no
+customer KMS key left behind. The networking is the Terraform-built VPC:
+
+![AWS Console: EKS configuration](evidence/m7-aws-console-eks-config.png)
+
+Control-plane logging is off, so there is no log group to outlive the cluster, and every
+resource carries the `Project=argus` tag used to verify the teardown:
+
+![AWS Console: EKS logging and tags](evidence/m7-aws-console-eks-tags.png)
 
 **Destroy.** `terraform destroy` removed all 50 resources. The checks afterwards query AWS
 directly, not Terraform's state: no EKS clusters, no tagged VPCs, no NAT gateways, no Elastic
-IPs, no running instances and no load balancers. Nothing is left to bill. The cluster ran for
-about 40 minutes, a few tens of cents of the account's credit.
+IPs, no running instances and no load balancers. Nothing is left to bill. The cluster was
+created twice, once for the evidence above and once for the console screenshots, and was
+destroyed and verified empty both times. That was about an hour in total, under $0.50 of
+the account's credit.
 
 ![terraform destroy](evidence/m7-terraform-destroy.png)
 
