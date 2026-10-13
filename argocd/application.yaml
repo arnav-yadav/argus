@@ -1,0 +1,35 @@
+# ArgoCD watches main and keeps the cluster equal to helm/argus + values-minikube.yaml.
+# The CI `promote` job rewrites image.tag in that file after every green build, so a
+# merged commit reaches the cluster with no kubectl or helm command run by hand.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argus
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arnav-yadav/argus.git
+    targetRevision: main
+    path: helm/argus
+    helm:
+      releaseName: argus
+      valueFiles:
+        - values-minikube.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argus
+  syncPolicy:
+    automated:
+      prune: true      # delete resources that were removed from Git
+      selfHeal: true   # undo manual changes made with kubectl
+    syncOptions:
+      - CreateNamespace=false   # k8s/namespace.yaml owns the namespace and its Pod Security labels
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

@@ -1,0 +1,48 @@
+# Values for prometheus-community/kube-prometheus-stack, installed as release "monitoring":
+#   helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace -f monitoring/kube-prometheus-values.yaml
+#
+# The Argus chart labels its ServiceMonitor and PrometheusRule with release=monitoring,
+# which is what this release's Prometheus selects by default.
+
+grafana:
+  # The chart's well-known default is "prom-operator". An empty value makes Grafana
+  # generate a random password, stored in secret/monitoring-grafana.
+  adminPassword: ""
+  persistence:
+    enabled: false
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      # The Argus dashboard ConfigMap lives in the argus namespace, not here.
+      searchNamespace: ALL
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 384Mi }
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    retention: 2d
+    resources:
+      requests: { cpu: 100m, memory: 512Mi }
+      limits: { memory: 1Gi }
+
+# Alerts still evaluate and show on Prometheus's /alerts page; nothing routes them on a
+# laptop cluster, so Alertmanager is left out to save memory.
+alertmanager:
+  enabled: false
+
+# minikube does not expose these control-plane components to Prometheus, so their
+# targets would only ever show as DOWN.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
