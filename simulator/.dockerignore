@@ -1,0 +1,6 @@
+# Only simulate.py goes into the image.
+__pycache__/
+*.pyc
+.ruff_cache/
+.venv/
+.env
