@@ -15,7 +15,7 @@ from prometheus_client.registry import Collector
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import reporting
+from app import reporting, slo
 from app.models import Service
 
 log = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ HEARTBEATS = Counter(
 
 # 5m and 1h feed the fast-burn alert; 24h feeds the slow-burn alert and the budget gauge.
 SCRAPE_WINDOWS = ("5m", "1h", "24h")
+BUDGET_WINDOW = "24h"
 
 
 class SLOCollector(Collector):
@@ -53,7 +54,7 @@ class SLOCollector(Collector):
         )
         budget = GaugeMetricFamily(
             "argus_error_budget_remaining_ratio",
-            "Error budget left over 24h. Negative once the SLO is breached.",
+            f"Error budget left over {BUDGET_WINDOW}. Negative once the SLO is breached.",
             labels=["service"],
         )
         slo_target = GaugeMetricFamily(
@@ -67,19 +68,16 @@ class SLOCollector(Collector):
                 last = reporting.last_beats(db)
                 for service in services:
                     slug = service.slug
+                    last_beat = last.get(service.id)
+                    state = reporting.status_of(service, last_beat, now)
+                    up.add_metric([slug], 1.0 if slo.is_available(state) else 0.0)
                     slo_target.add_metric([slug], service.slo_target / 100)
                     for window in SCRAPE_WINDOWS:
-                        report = reporting.build_report(
-                            db, service, window, now, last.get(service.id)
-                        )
-                        if window == SCRAPE_WINDOWS[0]:
-                            up.add_metric(
-                                [slug], 1.0 if report.status in ("up", "degraded") else 0.0
-                            )
+                        report = reporting.build_report(db, service, window, now, last_beat)
                         if report.uptime is not None:
                             uptime.add_metric([slug, window], report.uptime)
                             burn.add_metric([slug, window], report.burn_rate)
-                        if window == "24h" and report.budget is not None:
+                        if window == BUDGET_WINDOW and report.budget is not None:
                             budget.add_metric([slug], report.budget.remaining_ratio)
         except Exception:  # a broken database must not take /metrics down with it
             log.exception("SLO collector failed")

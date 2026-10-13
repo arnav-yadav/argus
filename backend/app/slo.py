@@ -20,12 +20,18 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+# What a heartbeat reports.
+BEAT_OK = "ok"
+BEAT_DEGRADED = "degraded"
+BEAT_FAIL = "fail"
+
+# What Argus concludes about a service.
 UP = "up"
 DEGRADED = "degraded"
 DOWN = "down"
 UNKNOWN = "unknown"
 
-AVAILABLE_STATUSES = frozenset({"ok", "degraded"})
+AVAILABLE_STATUSES = frozenset({BEAT_OK, BEAT_DEGRADED})
 
 WINDOWS: dict[str, timedelta] = {
     "5m": timedelta(minutes=5),  # used by the fast-burn alert, not offered by the API
@@ -55,11 +61,16 @@ def current_status(
     silence = (as_utc(now) - as_utc(last_beat_at)).total_seconds()
     if silence > interval_s * missed_beats_before_down:
         return DOWN
-    if last_beat_status == "fail":
+    if last_beat_status == BEAT_FAIL:
         return DOWN
-    if last_beat_status == "degraded":
+    if last_beat_status == BEAT_DEGRADED:
         return DEGRADED
     return UP
+
+
+def is_available(state: str) -> bool:
+    """Up or degraded: the service is still serving, so it counts as available."""
+    return state in (UP, DEGRADED)
 
 
 @dataclass(frozen=True)
@@ -128,6 +139,11 @@ def allowed_error_ratio(slo_target_pct: float) -> float:
     return 1 - slo_target_pct / 100
 
 
+def allowed_downtime_s(slo_target_pct: float, window: timedelta) -> float:
+    """The error budget in seconds: (1 - target) x window length."""
+    return allowed_error_ratio(slo_target_pct) * window.total_seconds()
+
+
 def burn_rate(uptime: float, slo_target_pct: float) -> float:
     """Observed error ratio divided by the allowed error ratio."""
     return (1 - uptime) / allowed_error_ratio(slo_target_pct)
@@ -153,7 +169,7 @@ def error_budget(slo_target_pct: float, bad_seconds: float, window: timedelta) -
     spending is what `burn_rate` reports. `remaining_ratio` goes negative once the budget
     for the window is gone.
     """
-    allowed_s = allowed_error_ratio(slo_target_pct) * window.total_seconds()
+    allowed_s = allowed_downtime_s(slo_target_pct, window)
     consumed = bad_seconds / allowed_s
     return ErrorBudget(
         allowed_downtime_s=allowed_s,

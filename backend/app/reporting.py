@@ -19,8 +19,6 @@ class LastBeat:
 
 @dataclass(frozen=True)
 class Report:
-    service: Service
-    window: str
     status: str
     uptime: float | None
     burn_rate: float | None
@@ -96,4 +94,4 @@ def build_report(
         if with_sparkline
         else []
     )
-    return Report(service, window, status_of(service, last, now), uptime, burn, budget, spark)
+    return Report(status_of(service, last, now), uptime, burn, budget, spark)

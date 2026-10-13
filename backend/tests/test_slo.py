@@ -41,6 +41,13 @@ class TestCurrentStatus:
         naive = (NOW - timedelta(seconds=5)).replace(tzinfo=None)
         assert slo.current_status(naive, "ok", 30, NOW) == slo.UP
 
+    @pytest.mark.parametrize(
+        ("state", "available"),
+        [(slo.UP, True), (slo.DEGRADED, True), (slo.DOWN, False), (slo.UNKNOWN, False)],
+    )
+    def test_degraded_still_counts_as_available(self, state, available):
+        assert slo.is_available(state) is available
+
 
 class TestSlotUptime:
     def test_a_beat_in_every_slot_is_full_uptime(self):
@@ -110,6 +117,10 @@ class TestErrorBudget:
         assert budget.consumed_ratio == pytest.approx(10)
         assert budget.remaining_ratio == pytest.approx(-9)
         assert budget.exhausted
+
+    def test_allowed_downtime_is_the_budget_in_seconds(self):
+        assert slo.allowed_downtime_s(99.9, timedelta(hours=24)) == pytest.approx(86.4)
+        assert slo.allowed_downtime_s(99.0, timedelta(hours=6)) == pytest.approx(216)
 
     @pytest.mark.parametrize("target", [0, 100, 101, -5])
     def test_impossible_targets_are_rejected(self, target):

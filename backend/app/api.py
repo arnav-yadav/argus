@@ -11,7 +11,7 @@ from app.db import get_db
 from app.metrics import HEARTBEATS
 from app.models import Heartbeat, Service
 
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", tags=["services"])
 
 DB = Annotated[Session, Depends(get_db)]
 Window = Annotated[schemas.WindowName, Query()]
@@ -24,16 +24,23 @@ def _get_service(db: Session, service_id: int) -> Service:
     return service
 
 
-def _service_out(service: Service, last: reporting.LastBeat | None, now: datetime) -> dict:
-    return {
-        **schemas.ServiceOut.model_validate(service).model_dump(),
-        "status": reporting.status_of(service, last, now),
-        "last_beat_at": last.received_at if last else None,
-    }
+def _last_beat(db: Session, service: Service) -> reporting.LastBeat | None:
+    return reporting.last_beats(db, [service.id]).get(service.id)
 
 
-@router.post("/services", response_model=schemas.ServiceCreated, status_code=201)
-def register_service(payload: schemas.ServiceCreate, db: DB):
+def _service_out(
+    service: Service, last: reporting.LastBeat | None, now: datetime
+) -> schemas.ServiceOut:
+    return schemas.ServiceOut.model_validate(service).model_copy(
+        update={
+            "status": reporting.status_of(service, last, now),
+            "last_beat_at": last.received_at if last else None,
+        }
+    )
+
+
+@router.post("/services", status_code=201)
+def register_service(payload: schemas.ServiceCreate, db: DB) -> schemas.ServiceCreated:
     token = security.new_token()
     service = Service(
         name=payload.name,
@@ -49,11 +56,12 @@ def register_service(payload: schemas.ServiceCreate, db: DB):
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "slug already registered") from None
     db.refresh(service)
-    return {**_service_out(service, None, datetime.now(UTC)), "ingest_token": token}
+    created = _service_out(service, None, datetime.now(UTC))
+    return schemas.ServiceCreated(**created.model_dump(), ingest_token=token)
 
 
-@router.get("/services", response_model=list[schemas.ServiceOut])
-def list_services(db: DB, slug: str | None = None):
+@router.get("/services")
+def list_services(db: DB, slug: str | None = None) -> list[schemas.ServiceOut]:
     query = select(Service).order_by(Service.name)
     if slug:
         query = query.where(Service.slug == slug)
@@ -63,22 +71,20 @@ def list_services(db: DB, slug: str | None = None):
     return [_service_out(s, last.get(s.id), now) for s in services]
 
 
-@router.get("/services/{service_id}", response_model=schemas.ServiceOut)
-def get_service(service_id: int, db: DB):
+@router.get("/services/{service_id}")
+def get_service(service_id: int, db: DB) -> schemas.ServiceOut:
     service = _get_service(db, service_id)
-    last = reporting.last_beats(db, [service.id]).get(service.id)
-    return _service_out(service, last, datetime.now(UTC))
+    return _service_out(service, _last_beat(db, service), datetime.now(UTC))
 
 
-@router.put("/services/{service_id}", response_model=schemas.ServiceOut)
-def update_service(service_id: int, payload: schemas.ServiceUpdate, db: DB):
+@router.put("/services/{service_id}")
+def update_service(service_id: int, payload: schemas.ServiceUpdate, db: DB) -> schemas.ServiceOut:
     service = _get_service(db, service_id)
     for field, value in payload.model_dump(exclude_unset=True, exclude_none=True).items():
         setattr(service, field, value)
     db.commit()
     db.refresh(service)
-    last = reporting.last_beats(db, [service.id]).get(service.id)
-    return _service_out(service, last, datetime.now(UTC))
+    return _service_out(service, _last_beat(db, service), datetime.now(UTC))
 
 
 @router.delete("/services/{service_id}", status_code=204)
@@ -89,13 +95,13 @@ def delete_service(service_id: int, db: DB):
     return Response(status_code=204)
 
 
-@router.post("/services/{service_id}/rotate-token", response_model=schemas.TokenOut)
-def rotate_token(service_id: int, db: DB):
+@router.post("/services/{service_id}/rotate-token")
+def rotate_token(service_id: int, db: DB) -> schemas.TokenOut:
     service = _get_service(db, service_id)
     token = security.new_token()
     service.ingest_token_hash = security.hash_token(token)
     db.commit()
-    return {"ingest_token": token}
+    return schemas.TokenOut(ingest_token=token)
 
 
 @router.post(
@@ -118,31 +124,30 @@ def ingest_heartbeat(
     return beat
 
 
-@router.get("/services/{service_id}/uptime", response_model=schemas.UptimeOut)
-def service_uptime(service_id: int, db: DB, window: Window = "24h"):
+@router.get("/services/{service_id}/uptime")
+def service_uptime(service_id: int, db: DB, window: Window = "24h") -> schemas.UptimeOut:
     service = _get_service(db, service_id)
     now = datetime.now(UTC)
-    last = reporting.last_beats(db, [service.id]).get(service.id)
-    report = reporting.build_report(db, service, window, now, last, with_sparkline=True)
-    budget = report.budget
-    return {
-        "service_id": service.id,
-        "slug": service.slug,
-        "window": window,
-        "status": report.status,
-        "slo_target": service.slo_target,
-        "uptime": report.uptime,
-        "burn_rate": report.burn_rate,
-        "allowed_downtime_s": slo.allowed_error_ratio(service.slo_target)
-        * slo.WINDOWS[window].total_seconds(),
-        "budget_consumed_ratio": budget.consumed_ratio if budget else None,
-        "budget_remaining_ratio": budget.remaining_ratio if budget else None,
-        "sparkline": report.sparkline,
-    }
+    report = reporting.build_report(
+        db, service, window, now, _last_beat(db, service), with_sparkline=True
+    )
+    return schemas.UptimeOut(
+        service_id=service.id,
+        slug=service.slug,
+        window=window,
+        status=report.status,
+        slo_target=service.slo_target,
+        uptime=report.uptime,
+        burn_rate=report.burn_rate,
+        allowed_downtime_s=slo.allowed_downtime_s(service.slo_target, slo.WINDOWS[window]),
+        budget_consumed_ratio=report.budget.consumed_ratio if report.budget else None,
+        budget_remaining_ratio=report.budget.remaining_ratio if report.budget else None,
+        sparkline=report.sparkline,
+    )
 
 
-@router.get("/slo/budget", response_model=schemas.FleetBudgetOut)
-def fleet_budget(db: DB, window: Window = "24h"):
+@router.get("/slo/budget")
+def fleet_budget(db: DB, window: Window = "24h") -> schemas.FleetBudgetOut:
     now = datetime.now(UTC)
     services = list(db.scalars(select(Service).order_by(Service.name)))
     last = reporting.last_beats(db)
@@ -150,27 +155,27 @@ def fleet_budget(db: DB, window: Window = "24h"):
     for service in services:
         report = reporting.build_report(db, service, window, now, last.get(service.id))
         items.append(
-            {
-                "service_id": service.id,
-                "slug": service.slug,
-                "name": service.name,
-                "status": report.status,
-                "slo_target": service.slo_target,
-                "uptime": report.uptime,
-                "burn_rate": report.burn_rate,
-                "budget_remaining_ratio": report.budget.remaining_ratio if report.budget else None,
-            }
+            schemas.ServiceBudget(
+                service_id=service.id,
+                slug=service.slug,
+                name=service.name,
+                status=report.status,
+                slo_target=service.slo_target,
+                uptime=report.uptime,
+                burn_rate=report.burn_rate,
+                budget_remaining_ratio=report.budget.remaining_ratio if report.budget else None,
+            )
         )
 
-    judged = [i for i in items if i["uptime"] is not None]
-    meeting = sum(1 for i in judged if i["uptime"] * 100 >= i["slo_target"])
-    burns = [i["burn_rate"] for i in judged]
-    return {
-        "window": window,
-        "services": len(items),
-        "meeting_slo": meeting,
-        "breaching_slo": len(judged) - meeting,
-        "no_data": len(items) - len(judged),
-        "worst_burn_rate": max(burns) if burns else None,
-        "items": items,
-    }
+    judged = [i for i in items if i.uptime is not None]
+    meeting = sum(1 for i in judged if i.uptime * 100 >= i.slo_target)
+    burns = [i.burn_rate for i in judged]
+    return schemas.FleetBudgetOut(
+        window=window,
+        services=len(items),
+        meeting_slo=meeting,
+        breaching_slo=len(judged) - meeting,
+        no_data=len(items) - len(judged),
+        worst_burn_rate=max(burns) if burns else None,
+        items=items,
+    )
