@@ -20,7 +20,7 @@ env:
 jobs:
   backend:
     name: Backend · lint and test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: backend
@@ -45,7 +45,7 @@ jobs:
 
   frontend:
     name: Frontend · build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -65,7 +65,7 @@ jobs:
 
   helm:
     name: Helm · lint and validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
@@ -88,7 +88,7 @@ jobs:
 
   secrets:
     name: Secret scan · gitleaks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -101,7 +101,7 @@ jobs:
   images:
     name: Image · ${{ matrix.component }}
     needs: [backend, frontend]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write          # push to GHCR
@@ -187,7 +187,7 @@ jobs:
     name: Promote · GitOps (minikube)
     needs: [images, helm, secrets]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     concurrency:
