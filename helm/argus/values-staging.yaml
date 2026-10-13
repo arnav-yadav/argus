@@ -1,0 +1,22 @@
+# Staging is installed imperatively, to try a build before it is promoted:
+#   helm upgrade --install argus helm/argus -n argus-staging \
+#     -f helm/argus/values-staging.yaml --set image.tag=sha-<commit>
+# Monitoring objects stay with the GitOps environment, so Grafana and the alerts are
+# not fed every service twice, and the dashboard UID is not defined twice.
+postgres:
+  existingSecret: argus-db
+
+simulator:
+  enabled: true
+
+ingress:
+  enabled: true
+  host: staging.argus.localhost
+
+metrics:
+  serviceMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: false
+  dashboard:
+    enabled: false

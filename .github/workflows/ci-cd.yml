@@ -75,7 +75,7 @@ jobs:
             | tar -xz -C /usr/local/bin kubeconform
       - name: Lint every values file
         run: |
-          for values in values.yaml values-minikube.yaml values-eks.yaml; do
+          for values in values.yaml values-minikube.yaml values-staging.yaml values-eks.yaml; do
             helm lint helm/argus --strict -f "helm/argus/$values"
           done
       - name: Render and validate against Kubernetes 1.35 schemas
