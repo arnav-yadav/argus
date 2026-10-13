@@ -1,0 +1,16 @@
+{{- if .Values.metrics.dashboard.enabled }}
+# The kube-prometheus-stack Grafana sidecar loads any ConfigMap carrying the
+# grafana_dashboard label, so the dashboard appears without a manual import.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "argus.fullname" . }}-dashboard
+  labels:
+    {{- include "argus.labels" . | nindent 4 }}
+    {{- with .Values.metrics.dashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+data:
+  argus.json: |-
+{{ .Files.Get "dashboards/argus.json" | indent 4 }}
+{{- end }}

@@ -1,0 +1,20 @@
+Argus {{ .Chart.AppVersion }} is deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+Images: {{ .Values.image.registry }}/argus-*:{{ .Values.image.tag | default .Chart.AppVersion }}
+
+{{- if .Values.ingress.enabled }}
+
+Status board: http://{{ .Values.ingress.host }}/
+API:          http://{{ .Values.ingress.host }}/api/slo/budget
+
+On minikube with the Docker driver the ingress controller is not reachable directly
+from macOS. Forward it, then browse http://{{ .Values.ingress.host }}:8080/ :
+  kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80
+{{- else if eq .Values.frontend.service.type "LoadBalancer" }}
+
+The frontend is behind a LoadBalancer. Find its address with:
+  kubectl -n {{ .Release.Namespace }} get svc {{ include "argus.frontendName" . }}
+{{- end }}
+
+Check everything is healthy:
+  kubectl -n {{ .Release.Namespace }} get pods
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

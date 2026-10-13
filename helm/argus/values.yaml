@@ -1,0 +1,71 @@
+# Images are published by CI as ghcr.io/<owner>/argus-<component>:sha-<commit>.
+image:
+  registry: ghcr.io/arnav-yadav
+  tag: ""                # empty -> Chart.appVersion. CI and GitOps set sha-<commit>.
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+backend:
+  replicaCount: 2        # ignored while autoscaling is enabled; minReplicas applies instead
+  port: 8000
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 384Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+frontend:
+  replicaCount: 2
+  port: 8080
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+
+postgres:
+  image: postgres:17-alpine
+  database: argus
+  username: argus
+  # Preferred: the name of a Secret with a `password` key, created outside Git, e.g.
+  #   kubectl -n argus create secret generic argus-db --from-literal=password=$(openssl rand -hex 16)
+  existingSecret: ""
+  # Fallback for local experiments only. Ignored when existingSecret is set.
+  password: change-me-local-only
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""     # "" -> the cluster default
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+simulator:
+  enabled: false
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 100m, memory: 64Mi }
+
+ingress:
+  enabled: true
+  className: nginx
+  host: argus.localhost
+  annotations: {}
+  tls: []
+
+metrics:
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    labels: {}           # e.g. { release: monitoring } so kube-prometheus-stack selects it
+  prometheusRule:
+    enabled: true
+    labels: {}
+  dashboard:
+    enabled: true        # ConfigMap picked up by the Grafana dashboard sidecar
+    labels:
+      grafana_dashboard: "1"

@@ -1,0 +1,54 @@
+{{- if and .Values.metrics.prometheusRule.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "argus.fullname" . }}-slo
+  labels:
+    {{- include "argus.labels" . | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: argus-slo
+      rules:
+        # Multi-window, multi-burn-rate alerting (Google SRE workbook, chapter 5).
+        # 14.4x burns a 30-day budget in about two days. Requiring the 5m window as well
+        # means the alert clears quickly once the problem is fixed. Both replicas export
+        # identical gauges, so `max by (service)` de-duplicates them.
+        - alert: ArgusErrorBudgetFastBurn
+          expr: |
+            max by (service) (argus_burn_rate{window="1h"}) > 14.4
+            and
+            max by (service) (argus_burn_rate{window="5m"}) > 14.4
+          for: 2m
+          labels:
+            severity: page
+          annotations:
+            summary: "{{`{{ $labels.service }}`}} is burning its error budget at over 14.4x"
+            description: "At this rate the service exhausts a 30-day error budget in about two days."
+        - alert: ArgusErrorBudgetSlowBurn
+          expr: |
+            max by (service) (argus_burn_rate{window="24h"}) > 1
+            and
+            max by (service) (argus_burn_rate{window="1h"}) > 1
+          for: 15m
+          labels:
+            severity: ticket
+          annotations:
+            summary: "{{`{{ $labels.service }}`}} is spending error budget faster than its SLO allows"
+        - alert: ArgusServiceDown
+          expr: max by (service) (argus_service_up) == 0
+          for: 1m
+          labels:
+            severity: page
+          annotations:
+            summary: "{{`{{ $labels.service }}`}} has stopped sending healthy heartbeats"
+        - alert: ArgusErrorBudgetExhausted
+          expr: max by (service) (argus_error_budget_remaining_ratio) < 0
+          for: 5m
+          labels:
+            severity: ticket
+          annotations:
+            summary: "{{`{{ $labels.service }}`}} has used its whole 24h error budget"
+{{- end }}

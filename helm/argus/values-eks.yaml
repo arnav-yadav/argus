@@ -1,0 +1,26 @@
+# One-off "app on EKS" demo. No ingress controller is installed there, so the frontend
+# gets a LoadBalancer, and Postgres skips persistence because the cluster runs without
+# the EBS CSI add-on. Delete the release before `terraform destroy` so the load
+# balancer goes away first.
+frontend:
+  service:
+    type: LoadBalancer
+
+postgres:
+  existingSecret: argus-db
+  persistence:
+    enabled: false
+
+simulator:
+  enabled: true
+
+ingress:
+  enabled: false
+
+metrics:
+  serviceMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: false
+  dashboard:
+    enabled: false

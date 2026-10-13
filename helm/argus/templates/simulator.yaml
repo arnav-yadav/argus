@@ -1,0 +1,36 @@
+{{- if .Values.simulator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "argus.fullname" . }}-simulator
+  labels:
+    {{- include "argus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "argus.selectorLabels" (dict "ctx" . "component" "simulator") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "argus.selectorLabels" (dict "ctx" . "component" "simulator") | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10002
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: simulator
+          image: {{ include "argus.image" (dict "ctx" . "component" "simulator") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: ARGUS_API
+              value: {{ printf "http://%s:%v" (include "argus.backendName" .) .Values.backend.port | quote }}
+          securityContext:
+            {{- include "argus.containerSecurity" . | nindent 12 }}
+            readOnlyRootFilesystem: true
+          resources:
+            {{- toYaml .Values.simulator.resources | nindent 12 }}
+{{- end }}
