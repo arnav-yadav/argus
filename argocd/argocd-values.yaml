@@ -1,0 +1,16 @@
+# Values for argo/argo-cd, installed as release "argocd":
+#   helm upgrade --install argocd argo/argo-cd --version 10.10.3 \
+#     -n argocd --create-namespace -f argocd/argocd-values.yaml
+configs:
+  cm:
+    # Poll Git every 60s instead of the default 3 minutes, so a promoted image tag
+    # reaches the cluster within about a minute of the pipeline finishing. The chart's
+    # default 60s jitter is trimmed too, or the worst case would double.
+    timeout.reconciliation: 60s
+    timeout.reconciliation.jitter: 10s
+
+# Single sign-on and notifications are not needed on a local demo cluster.
+dex:
+  enabled: false
+notifications:
+  enabled: false
