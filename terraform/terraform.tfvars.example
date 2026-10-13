@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars to override defaults. terraform.tfvars is gitignored.
+# There are no credentials here: Terraform reads them from `aws configure` (~/.aws).
+
+region             = "ap-southeast-2"
+environment        = "demo"
+cluster_name       = "argus-eks"
+kubernetes_version = "1.35"
+node_instance_type = "m7i-flex.large"
+node_desired_size  = 2
+node_min_size      = 1
+node_max_size      = 3
