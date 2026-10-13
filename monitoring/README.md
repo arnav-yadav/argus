@@ -31,6 +31,11 @@ The SLO gauges are computed from the database on every scrape by a custom collec
 background job keeps state, so every backend replica reports the same values. Queries
 therefore use `max by (service)` to collapse the duplicate series from each replica.
 
+The ServiceMonitor sets `honorLabels: true`. Argus's `service` label names the *monitored*
+service, which clashes with the `service` label Kubernetes discovery adds (the Argus
+backend's own Service). Without it, Prometheus renames the Argus label to
+`exported_service`, and every monitored service collapses into a single series.
+
 ## Alerts
 
 `helm/argus/templates/prometheusrule.yaml` uses the multi-window, multi-burn-rate pattern

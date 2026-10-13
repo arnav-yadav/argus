@@ -18,4 +18,10 @@ spec:
     - port: http
       path: /metrics
       interval: {{ .Values.metrics.serviceMonitor.interval }}
+      # Argus metrics carry a `service` label naming the *monitored* service. Kubernetes
+      # discovery attaches its own `service` label (this Service's name), and without
+      # honorLabels Prometheus would rename ours to `exported_service`, collapsing every
+      # monitored service into one series. Our metrics set no job/pod/namespace labels,
+      # so honouring them overrides nothing else.
+      honorLabels: true
 {{- end }}
