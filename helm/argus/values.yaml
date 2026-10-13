@@ -46,6 +46,11 @@ postgres:
 
 simulator:
   enabled: false
+  # The simulator stands in for external services, so it can be versioned on its own.
+  # Empty -> image.tag. Pinning it stops every Argus deploy from restarting the services'
+  # heartbeat sender, which Argus would correctly report as downtime.
+  image:
+    tag: ""
   resources:
     requests: { cpu: 10m, memory: 32Mi }
     limits: { cpu: 100m, memory: 64Mi }

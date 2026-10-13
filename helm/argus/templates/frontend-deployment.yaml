@@ -45,6 +45,12 @@ spec:
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 5
+          # Keep serving for a few seconds after termination starts, while the endpoint
+          # is removed from the Service, so in-flight requests are not dropped mid-rollout.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           securityContext:
             {{- include "argus.containerSecurity" . | nindent 12 }}
             readOnlyRootFilesystem: true

@@ -8,6 +8,8 @@ postgres:
 
 simulator:
   enabled: true
+  image:
+    tag: sha-5c0ebeb   # pinned on purpose; bump by hand when simulator/ changes
 
 ingress:
   enabled: true

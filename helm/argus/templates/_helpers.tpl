@@ -23,8 +23,12 @@ app.kubernetes.io/instance: {{ .ctx.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 
+{{/* Image for one component. A component may pin its own tag (simulator.image.tag);
+     otherwise every component shares image.tag, falling back to the chart's appVersion. */}}
 {{- define "argus.image" -}}
-{{- printf "%s/argus-%s:%s" .ctx.Values.image.registry .component (.ctx.Values.image.tag | default .ctx.Chart.AppVersion) -}}
+{{- $own := "" -}}
+{{- with (index .ctx.Values .component) -}}{{- with .image -}}{{- $own = .tag -}}{{- end -}}{{- end -}}
+{{- printf "%s/argus-%s:%s" .ctx.Values.image.registry .component ($own | default .ctx.Values.image.tag | default .ctx.Chart.AppVersion) -}}
 {{- end -}}
 
 {{- define "argus.backendName" -}}{{ include "argus.fullname" . }}-backend{{- end -}}
