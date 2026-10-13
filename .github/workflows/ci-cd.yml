@@ -1,10 +1,10 @@
 name: CI/CD
 
 on:
+  # Every push to main runs the whole pipeline and ships, docs-only changes included, so
+  # what runs in the cluster is always the head of main.
   push:
     branches: [main]
-    # A docs-only change cannot affect the images, so it should not rebuild and redeploy.
-    paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
     paths-ignore: ["docs/**", "**/*.md"]
   workflow_dispatch:
