@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.db
+
+# Node
+node_modules/
+dist/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+
+# Terraform (the lock file IS committed so provider versions are reproducible)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+*.tfplan
+crash.log
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
