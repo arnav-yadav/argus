@@ -1,3 +1,14 @@
+variable "api_public_access_cidrs" {
+  description = "CIDR blocks allowed to reach the Kubernetes API from the internet. Set it to your own address, e.g. [\"203.0.113.7/32\"]."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.api_public_access_cidrs) > 0 && alltrue([for cidr in var.api_public_access_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "api_public_access_cidrs must be a non-empty list of IPv4 CIDR blocks."
+  }
+}
+
 variable "cluster_name" {
   description = "Name of the EKS cluster and prefix for the VPC."
   type        = string

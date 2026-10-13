@@ -14,9 +14,15 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  # Public API endpoint so kubectl works from a laptop; the identity running Terraform
-  # becomes cluster admin through an EKS access entry.
-  endpoint_public_access                   = true
+  # The API server is reachable from the internet only from the listed CIDRs, so kubectl
+  # works from the operator's laptop and nowhere else. Nodes reach it privately inside
+  # the VPC (endpoint_private_access defaults to true).
+  endpoint_public_access       = true
+  endpoint_public_access_cidrs = var.api_public_access_cidrs
+
+  # Access entries only, no aws-auth ConfigMap. The identity running Terraform becomes
+  # cluster admin through one, and the node group gets its own automatically.
+  authentication_mode                      = "API"
   enable_cluster_creator_admin_permissions = true
 
   # No IAM OIDC provider: nothing here uses IRSA, and pods that need AWS access use EKS
@@ -33,6 +39,9 @@ module "eks" {
     eks-pod-identity-agent = {
       before_compute = true
     }
+    # Reports kernel, disk, network and container-runtime faults as node conditions,
+    # which the node group's auto repair acts on.
+    eks-node-monitoring-agent = {}
   }
 
   eks_managed_node_groups = {
@@ -45,20 +54,42 @@ module "eks" {
       max_size     = var.node_max_size
       desired_size = var.node_desired_size
 
+      # This account does not encrypt new EBS volumes by default, so the node disks are
+      # encrypted explicitly. The module already requires IMDSv2 with a hop limit of 1,
+      # which keeps pods from reaching the node's instance credentials.
+      block_device_mappings = {
+        root = {
+          device_name = "/dev/xvda"
+          ebs = {
+            volume_size           = 20
+            volume_type           = "gp3"
+            encrypted             = true
+            delete_on_termination = true
+          }
+        }
+      }
+
+      # Replace a node that stays unhealthy, instead of waiting for someone to notice.
+      node_repair_config = {
+        enabled = true
+      }
+
       labels = {
         workload = "argus"
       }
     }
   }
 
-  # Short-lived demo cluster: skip the resources that outlive `terraform destroy` or
-  # bill after it. A customer-managed KMS key sits in pending deletion for 7+ days, and
-  # EKS can recreate its CloudWatch log group while the cluster is shutting down.
-  # Kubernetes secrets are still encrypted at rest by EKS's default envelope encryption.
-  # A production cluster would enable both, plus audit logging.
-  create_kms_key              = false
-  encryption_config           = null
-  create_cloudwatch_log_group = false
-  enabled_log_types           = []
-  deletion_protection         = false
+  # Control-plane audit, API and authenticator logs go to CloudWatch, kept for a day:
+  # enough to investigate a demo, cheap, and gone soon after the cluster is.
+  enabled_log_types                      = ["api", "audit", "authenticator"]
+  create_cloudwatch_log_group            = true
+  cloudwatch_log_group_retention_in_days = 1
+
+  # Short-lived demo cluster: no customer-managed KMS key, which would sit in pending
+  # deletion for 7+ days after destroy. Kubernetes secrets are still encrypted at rest by
+  # EKS's default envelope encryption with an AWS-owned key.
+  create_kms_key      = false
+  encryption_config   = null
+  deletion_protection = false
 }

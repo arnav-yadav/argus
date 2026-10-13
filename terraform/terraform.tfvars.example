@@ -9,3 +9,7 @@ node_instance_type = "m7i-flex.large"
 node_desired_size  = 2
 node_min_size      = 1
 node_max_size      = 3
+
+# Only these addresses can reach the Kubernetes API. Find yours with:
+#   curl -s https://checkip.amazonaws.com
+api_public_access_cidrs = ["203.0.113.7/32"]
