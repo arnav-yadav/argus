@@ -1,0 +1,71 @@
+# Local stack: docker compose up --build        -> http://localhost:3000
+# With live demo data: docker compose --profile demo up --build
+name: argus
+
+x-database-url: &database-url
+  DATABASE_URL: postgresql+psycopg://argus:${POSTGRES_PASSWORD:-argus}@postgres:5432/argus
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: argus
+      POSTGRES_USER: argus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-argus}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U argus -d argus"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Runs the schema migrations once, then exits. The backend waits for it to succeed,
+  # the same way the Kubernetes init container gates the backend pods.
+  migrate:
+    build: ./backend
+    image: argus-backend:local
+    command: ["alembic", "upgrade", "head"]
+    environment: *database-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build: ./backend
+    image: argus-backend:local
+    environment: *database-url
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        APP_VERSION: compose
+    image: argus-frontend:local
+    environment:
+      BACKEND_HOST: backend
+      BACKEND_PORT: "8000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:8080"
+
+  simulator:
+    build: ./simulator
+    image: argus-simulator:local
+    profiles: ["demo"]
+    environment:
+      ARGUS_API: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
