@@ -33,9 +33,13 @@ UNKNOWN = "unknown"
 
 AVAILABLE_STATUSES = frozenset({BEAT_OK, BEAT_DEGRADED})
 
+# 5m, 30m and 6h exist for the burn-rate alerts' short and long windows; the API offers
+# only 1h, 24h and 7d.
 WINDOWS: dict[str, timedelta] = {
-    "5m": timedelta(minutes=5),  # used by the fast-burn alert, not offered by the API
+    "5m": timedelta(minutes=5),
+    "30m": timedelta(minutes=30),
     "1h": timedelta(hours=1),
+    "6h": timedelta(hours=6),
     "24h": timedelta(hours=24),
     "7d": timedelta(days=7),
 }

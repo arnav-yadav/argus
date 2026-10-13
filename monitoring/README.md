@@ -22,7 +22,7 @@ The backend's `/metrics` endpoint serves two kinds of series:
 | `http_requests_total`, `http_request_duration_seconds` | prometheus-fastapi-instrumentator | Request rate, errors and latency per route |
 | `argus_heartbeats_total{service,status}` | counter in the ingest route | Heartbeats accepted, by result |
 | `argus_service_up{service}` | computed at scrape time | 1 if up or degraded, 0 if down |
-| `argus_uptime_ratio{service,window}` | computed at scrape time | Good slots / judged slots for 5m, 1h, 24h |
+| `argus_uptime_ratio{service,window}` | computed at scrape time | Good slots / judged slots for 5m, 30m, 1h, 6h, 24h |
 | `argus_burn_rate{service,window}` | computed at scrape time | Error-budget burn rate; 1 = on budget |
 | `argus_error_budget_remaining_ratio{service}` | computed at scrape time | 24h budget left; negative once breached |
 | `argus_slo_target_ratio{service}` | computed at scrape time | The configured target |
@@ -44,12 +44,17 @@ from chapter 5 of the Google SRE workbook:
 | Alert | Fires when | Severity |
 |---|---|---|
 | `ArgusErrorBudgetFastBurn` | 1h **and** 5m burn rate > 14.4× for 2m | page |
+| `ArgusErrorBudgetMediumBurn` | 6h **and** 30m burn rate > 6× for 5m | page |
 | `ArgusErrorBudgetSlowBurn` | 24h **and** 1h burn rate > 1× for 15m | ticket |
 | `ArgusServiceDown` | a service is down for 1m | page |
 | `ArgusErrorBudgetExhausted` | the 24h budget is below zero for 5m | ticket |
 
-A 14.4× burn rate would exhaust a 30-day budget in about two days. The short window
-makes the alert clear soon after recovery. Alertmanager is disabled on minikube, so alerts
+The 14.4× and 6× thresholds are the workbook's, set for a 30-day SLO period: 14.4× spends 2%
+of that budget in an hour and would exhaust it in about two days; 6× spends 5% in six hours.
+Burn rate itself does not depend on the period, so the same numbers read directly against the
+board's 24h budget, which 14.4× empties in 1h40m. The medium tier catches a burn too slow to
+trip the fast alert but too costly to leave until the next day. Each alert's short window
+is 1/12 of its long one, so it clears soon after recovery. Alertmanager is disabled on minikube, so alerts
 are viewed on Prometheus's **Alerts** page.
 
 ## Dashboard

@@ -26,8 +26,9 @@ HEARTBEATS = Counter(
     ["service", "status"],
 )
 
-# 5m and 1h feed the fast-burn alert; 24h feeds the slow-burn alert and the budget gauge.
-SCRAPE_WINDOWS = ("5m", "1h", "24h")
+# Each burn-rate alert pairs a long window with a short one: 1h+5m (fast), 6h+30m (medium),
+# 24h+1h (slow). 24h is also the window of the error-budget gauge.
+SCRAPE_WINDOWS = ("5m", "30m", "1h", "6h", "24h")
 BUDGET_WINDOW = "24h"
 
 

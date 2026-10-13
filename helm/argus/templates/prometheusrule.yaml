@@ -12,10 +12,11 @@ spec:
   groups:
     - name: argus-slo
       rules:
-        # Multi-window, multi-burn-rate alerting (Google SRE workbook, chapter 5).
-        # 14.4x burns a 30-day budget in about two days. Requiring the 5m window as well
-        # means the alert clears quickly once the problem is fixed. Both replicas export
-        # identical gauges, so `max by (service)` de-duplicates them.
+        # Multi-window, multi-burn-rate alerting (Google SRE workbook, chapter 5). The
+        # thresholds are the workbook's, set for a 30-day SLO period: 14.4x spends 2% of that
+        # budget in an hour, 6x spends 5% in six hours. Each alert also requires a short
+        # window (1/12 of the long one), so it clears soon after the problem is fixed. Both
+        # replicas export identical gauges, so `max by (service)` de-duplicates them.
         - alert: ArgusErrorBudgetFastBurn
           expr: |
             max by (service) (argus_burn_rate{window="1h"}) > 14.4
@@ -27,6 +28,17 @@ spec:
           annotations:
             summary: "{{`{{ $labels.service }}`}} is burning its error budget at over 14.4x"
             description: "At this rate the service exhausts a 30-day error budget in about two days."
+        - alert: ArgusErrorBudgetMediumBurn
+          expr: |
+            max by (service) (argus_burn_rate{window="6h"}) > 6
+            and
+            max by (service) (argus_burn_rate{window="30m"}) > 6
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "{{`{{ $labels.service }}`}} has burned its error budget at over 6x for six hours"
+            description: "At this rate the service exhausts a 30-day error budget in five days."
         - alert: ArgusErrorBudgetSlowBurn
           expr: |
             max by (service) (argus_burn_rate{window="24h"}) > 1
