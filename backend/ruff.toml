@@ -1,0 +1,14 @@
+line-length = 100
+target-version = "py313"
+
+[lint]
+# E/F: errors, I: import order, B: bugbear, UP: modern syntax, SIM: simplifications,
+# S: bandit security checks (this is a DevSecOps capstone, so they run on every push).
+select = ["E", "F", "I", "B", "UP", "SIM", "S"]
+
+[lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]  # asserts and fixture tokens are fine in tests
+
+[lint.isort]
+known-first-party = ["app"]
+known-third-party = ["alembic"]
