@@ -69,7 +69,8 @@ The application at `http://localhost:3000`:
 
 [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml) runs on every push to `main`.
 Tests and the frontend build gate the image builds. Three images are built, scanned and
-pushed to GHCR, and the Promote job hands the new tag to ArgoCD.
+pushed to GHCR, and the Promote job hands the new tag to ArgoCD. A green run you can open:
+[run #19](https://github.com/arnav-yadav/argus/actions/runs/38604387859), the live demo's.
 
 ![Green pipeline](evidence/m5-actions-run-green.png)
 
@@ -233,8 +234,9 @@ The Ingress routes `/api` to the backend and `/` to the frontend, for both envir
 ![Ingress routing](evidence/m8-ingress-routing.png)
 
 **Autoscaling.** The backend's HorizontalPodAutoscaler scales between 2 and 6 replicas on a
-70% CPU target. Under load from twelve parallel clients through the Ingress, CPU climbed past
-370% of the target and peaked at 383%. The HPA scaled the backend from 2 to 4 to 6 replicas within 30 seconds. No
+70% CPU target. Under load from twelve parallel clients through the Ingress, CPU use climbed
+past 370% of each pod's CPU request (the target is 70%) and peaked at 383%. The HPA scaled the
+backend from 2 to 4 to 6 replicas within 30 seconds. No
 simulated service missed a heartbeat while it scaled, and after a 5-minute cooldown it scaled
 back to 2.
 
@@ -256,8 +258,8 @@ error budgets, burn rates, heartbeat rates, request rates and latency percentile
 
 ![Grafana dashboard](evidence/m9-grafana-dashboard.png)
 
-The multi-window, multi-burn-rate alerts evaluating against live data, in the SRE
-workbook's three tiers:
+The multi-window, multi-burn-rate alerts evaluating against live data, in three tiers: the SRE
+workbook's fast and medium page tiers, plus a slow-burn ticket tier over 24h and 1h:
 
 - **Fast burn** (14.4× over 1h and 5m) is **firing** for *legacy-billing*, whose periodic
   90-second silences burn its 99.5% budget at 30×.
@@ -278,8 +280,10 @@ to run it.
 
 **Recorded walkthrough: [watch on YouTube](https://youtu.be/C6kht1PKC-k)** (3½ minutes), with
 the [presentation slides](Argus-presentation.pdf). The video includes a second live run of the
-demo below, recorded end to end: commit `01340e1` is pushed, the pipeline passes, the bot
-commits `sha-01340e1`, ArgoCD rolls new pods, and the board's footer shows `build sha-01340e1`.
+demo below: commit `01340e1` is pushed, [run #19](https://github.com/arnav-yadav/argus/actions/runs/38604387859)
+passes, the bot commits `sha-01340e1`, ArgoCD rolls new pods, and the board's footer shows
+`build sha-01340e1`. Its opening shot of the board was taken while an earlier rehearsal build
+was still deployed, so that tagline ends in "Test".
 
 **Live demo: commit → pipeline → deployment update.** A visible change goes from a commit
 to the running cluster with no `kubectl` or `helm` command run by hand.
