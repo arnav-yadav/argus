@@ -79,7 +79,7 @@ export default function App() {
           </svg>
           <div>
             <h1>Argus</h1>
-            <p className="tagline">Every service watched. Every error budget accounted for. Every deploy traced to a commit.</p>
+            <p className="tagline">Every service watched. Every error budget accounted for. Every deploy traced to a commit. Test</p>
           </div>
         </div>
         <nav className="windows" aria-label="Reporting window">
