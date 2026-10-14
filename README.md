@@ -6,13 +6,17 @@ is being burned. Then it tells you before the budget runs out.
 
 [![CI/CD](https://github.com/arnav-yadav/argus/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/arnav-yadav/argus/actions/workflows/ci-cd.yml)
 
+**Start here:**
+
+- **[Watch the walkthrough on YouTube](https://youtu.be/C6kht1PKC-k)** (3½ minutes), including
+  the live demo: one commit goes from `git push` to the running cluster with no manual step.
+- **[Presentation slides (PDF)](docs/Argus-presentation.pdf)**, 7 slides, viewable right here
+  on GitHub. Also as [PowerPoint](docs/Argus-presentation.pptx) with speaker notes.
+- **[Evidence for every rubric module](docs/EVIDENCE.md)**, with screenshots.
+
 > Argus is the hundred-eyed watchman of Greek myth who never slept.
 
 ![Argus status board](docs/evidence/m1-status-board.png)
-
-**Evidence for every rubric module, with screenshots: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).**
-
-**Presentation (7 slides):** [PDF](docs/Argus-presentation.pdf) to view on GitHub, or [PowerPoint](docs/Argus-presentation.pptx) with speaker notes.
 
 ---
 
