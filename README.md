@@ -8,10 +8,11 @@ is being burned. Then it tells you before the budget runs out.
 
 **Start here:**
 
-- **[Watch the walkthrough on YouTube](https://youtu.be/C6kht1PKC-k)** (3½ minutes), including
+- **[Watch the walkthrough on YouTube](https://youtu.be/C6kht1PKC-k)** (3½ minutes, also in
+  [`demo/`](demo/Argus-walkthrough.mp4)), including
   the live demo: one commit goes from `git push` to the running cluster with no manual step.
-- **[Presentation slides (PDF)](docs/Argus-presentation.pdf)**, 7 slides, viewable right here
-  on GitHub. Also as [PowerPoint](docs/Argus-presentation.pptx) with speaker notes.
+- **[Presentation slides (PDF)](demo/Argus-presentation.pdf)**, 7 slides, viewable right here
+  on GitHub. Also as [PowerPoint](demo/Argus-presentation.pptx) with speaker notes.
 - **[Evidence for every rubric module](docs/EVIDENCE.md)**, with screenshots.
 
 > Argus is the hundred-eyed watchman of Greek myth who never slept.

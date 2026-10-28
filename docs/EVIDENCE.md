@@ -278,8 +278,9 @@ stack earlier in the day used up their 24h budgets, which is what it should repo
 The [README](../README.md) explains what Argus does, the SLO maths, the architecture and how
 to run it.
 
-**Recorded walkthrough: [watch on YouTube](https://youtu.be/C6kht1PKC-k)** (3½ minutes), with
-the [presentation slides](Argus-presentation.pdf). The video includes a second live run of the
+**Recorded walkthrough: [watch on YouTube](https://youtu.be/C6kht1PKC-k)** (3½ minutes; the file is
+[`demo/Argus-walkthrough.mp4`](../demo/Argus-walkthrough.mp4)), with
+the [presentation slides](../demo/Argus-presentation.pdf). The video includes a second live run of the
 demo below: commit `01340e1` is pushed, [run #19](https://github.com/arnav-yadav/argus/actions/runs/38604387859)
 passes, the bot commits `sha-01340e1`, ArgoCD rolls new pods, and the board's footer shows
 `build sha-01340e1`. Its opening shot of the board was taken while an earlier rehearsal build
